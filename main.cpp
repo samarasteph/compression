@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "partie1.h"
 #include "partie2.h"
 

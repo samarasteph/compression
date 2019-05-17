@@ -20,7 +20,7 @@ int main(int argc, char* argv[]){
 			std::cout << "Choix incorrect. Retaper (1) ou (2)." << std::endl;
 	} while(choix!=1 && choix!=2);
 
-	utilitaire u;
+	utilitaire2 u;
 	if (choix==1)
 	{
 		u.compresser(src,dest);

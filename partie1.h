@@ -25,6 +25,7 @@ public:
 
 class arbre
 {
+protected:
 	Noeud* racine;
 	//Question 8
 	int* table_codage[256]; 
@@ -32,7 +33,7 @@ class arbre
 public:
 	friend class utilitaire;
 
-	~arbre();
+	virtual ~arbre();
 	//Question 5
 	arbre(const std::string& s);
 	//Question 6

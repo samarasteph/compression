@@ -1,13 +1,16 @@
 #include "partie2.h"
 #include <iostream>
-#include <deque>
+#include <bitset>
 
+//#define _LOG_DEBUG_
+
+#ifdef _LOG_DEBUG_
+#include "tests.h"
+#endif
 
 #define TAILLE_BLOC_SMALL 1024
 #define TAILLE_BLOC_BIG 71680
 #define TAILLE_BLOC 	TAILLE_BLOC_SMALL
-
-
 
 std::pair<char*,int> utilitaire2::readfile(const std::string& file_path, unsigned decalage_bloc) const
 {
@@ -89,6 +92,7 @@ std::pair<char,int>* utilitaire2::frequence(std::list< std::pair< char, int > >&
 //#undef TAILLE_BLOC
 //#define TAILLE_BLOC TAILLE_BLOC_BIG
 
+
 void utilitaire2::compresser(const std::string& src, const std::string& dest)
 {
 
@@ -101,7 +105,15 @@ void utilitaire2::compresser(const std::string& src, const std::string& dest)
 	unsigned ecrits = 0;
 	bool continuer = true;
 	unsigned bit_offset = 0;
+	unsigned last_bit_offset = 0;
+	char c = '\0';
 	//on lit par bloc et on compresse chaque bloc qu'on rajoute en fin de fichier destination
+
+#ifdef _LOG_DEBUG_
+	reset_file("codes.txt");
+	reset_file("bits.txt");
+#endif
+
 	do {
 
 		std::ifstream ifs(src);
@@ -131,61 +143,67 @@ void utilitaire2::compresser(const std::string& src, const std::string& dest)
 		int * code = convertir_vers_code(data,a.table_codage);
 		char* bits = convertir_en_bit2(code+1,code[0]);
 
-		//si il y a un nombre de bits non multiple de 8 il faut ecraser la fin de fichier 
-		//en rajoutant la partie droite du premier octect code suivant
-		unsigned char mask_bytes [] = { 0x00, 0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x5f, 0x7f, 0xff };
-		char c = '\0';
-		if(bit_offset>0)
-		{
-			char pc[1];
+#ifdef _LOG_DEBUG_
+		log_code("codes.txt",code);
+		std::string sep = "@";
+#endif
 
-			ifs.open(dest, std::ios_base::in | std::ios_base::binary);
-			if( ifs.is_open() )
-			{
-				ifs.seekg(-1,ifs.end);
-				ifs.read(pc,1);
-
-				c = mask_bytes[8-bit_offset] & (bits[1] >> (8-bit_offset));
-				c = *pc | c;
-				ifs.close();
-			}
-			else
-				std::cerr << "Impossible d'ouvrir le fichier de destination en lecture" << std::endl;
-		}
-
-		std::ofstream ofs(dest,std::ios_base::out | std::ios_base::binary | std::ios_base::app);
+		std::ofstream ofs(dest,std::ios_base::in | std::ios_base::out | std::ios_base::binary | std::ios_base::ate); 
 		if (ofs.is_open())
 		{
-			unsigned size = utilitaire::nb_octets(code[0]);
-
-			std::cout << size << " octets compresses" << std::endl;
+			//si il y a un nombre de bits non multiple de 8 il faut ecraser la fin de fichier 
+			//en rajoutant la partie droite du premier octect code suivant
+			const unsigned size_octets = code[0] / 8;
+			const unsigned size_tableau = utilitaire2::nb_octets(code[0]);
+			const unsigned modulo = code[0] % 8;
 
 			//on écrase la fin du fichier avec le dernier caractère mixe avec le debut du code suivant
-			if(bit_offset>0)
+			//on ecrit les code en tenant compte de l'offset de bit
+			static const unsigned char mask_bytes [] = { 0xff, 0x7f, 0x3f, 0x1f, 0x0f, 0x07, 0x03, 0x01 };
+
+
+			std::cout << size_octets << " octets compresses; bit offset=" << bit_offset << " nb bits code=" <<  code[0] << " nb octets=" << size_octets << " last octet=" 
+				<< std::bitset<8>(c);
+
+			std::bitset<8> b(c | ( (bits[0] >> bit_offset) & mask_bytes[bit_offset] ));
+			std::cout << " first octet " << b << " stream offset=" << ofs.tellp() << std::endl;
+
+			unsigned j;
+
+			for ( j =  0; j < size_octets; j += 1 )
 			{
-				ofs.seekp(-1,ofs.end);
+				c = c | ( (bits[j] >> bit_offset) & mask_bytes[bit_offset] );
+
 				ofs.write(&c,1);
-				unsigned j;
-				//on ecrit les code en tenant compte de l'offset de bit
-				for ( j =  0; j < size - 1; j += 1 )
+#ifdef _LOG_DEBUG_
+				log_bits("bits.txt",c);
+#endif
+				c = (bits[j] <<  (8-bit_offset)); //0 si bit_offset = 0
+			}
+
+			ecrits += size_octets;
+
+			if ( j < size_tableau )
+			{
+				c = c | ( (bits[j] >> bit_offset) & mask_bytes[bit_offset] );
+				
+				if( modulo + bit_offset >= 8 )
 				{
-					c = (bits[j] << bit_offset) | ( mask_bytes[8-bit_offset] & (bits[j+1] >> (8-bit_offset)) ) ;
-
 					ofs.write(&c,1);
-					//ecrits += 1;
+#ifdef _LOG_DEBUG_
+					sep.append("@");
+					log_bits("bits.txt",c);
+#endif
+					unsigned offset = (bit_offset + modulo) % 8;
+					c = (bits[j] <<  (8-bit_offset)); //0 si bit_offset = 0
+					
+					ecrits += 1;
+
 				}
-				c = bits[j] << bit_offset;
-				ofs.write(&c,1);
-				//ecrits += 1;
-
 			}
-			else
-			{
-				ofs.write(bits,size);
-			}
-			ecrits += size;
 
-			bit_offset = (bit_offset + code[0])%8; // on réévalue le nouveau offset
+			bit_offset =  (bit_offset + modulo) % 8; // on réévalue le nouveau offset
+
 
 			ofs.close();
 		 }
@@ -194,11 +212,29 @@ void utilitaire2::compresser(const std::string& src, const std::string& dest)
 			std::cerr << "cannot open destination file " << dest << ". Compression areetée." << std::endl;
 			continuer = false;
 		}
+#ifdef _LOG_DEBUG_
+		log_file("codes.txt",sep);
+		log_file("bits.txt",sep);
+#endif
 
 		delete [] code;
 		delete [] bits;
+
 	}while(continuer);
 
+	if (bit_offset)
+	{
+		std::ofstream ofs(dest,std::ios_base::in | std::ios_base::out | std::ios_base::binary | std::ios_base::ate); 
+		if (ofs.is_open())
+		{
+			ofs.write(&c,1);
+			ofs.close();
+		}
+		else
+		{
+			std::cerr << "Impossible d'ouvrir fichier destination pour ecrire byte final" << std::endl;
+		}
+	}
 	std::cout << ecrits << " octets écrits" << std::endl;
 	
 }
@@ -211,8 +247,8 @@ void utilitaire2::compresser(const std::string& src, const std::string& dest)
 
 #ifdef TAILLE_BLOC
 
-//#undef TAILLE_BLOC
-//#define TAILLE_BLOC TAILLE_BLOC_BIG
+#undef TAILLE_BLOC
+#define TAILLE_BLOC TAILLE_BLOC_SMALL
 
 void utilitaire2::decompresser(const std::string& src, const std::string& dest)
 {
@@ -306,8 +342,9 @@ void utilitaire2::decompresser(const std::string& src, const std::string& dest)
 							// on doit revenir en arrière en arrondissant à l'octet inferieur à offset (qui est en bits)
 							
 							decalage_bloc +=  ((offset/8) - taille_bloc_lu);
-							std::cout << "error reading, restarting from " << decalage_bloc << " with bit offset " << decalage_bit ;
 							decalage_bit = (offset%8);
+
+							std::cout << "error reading, restarting from " << decalage_bloc << " with bit offset " << decalage_bit ;
 
 							break;
 						}
@@ -328,7 +365,7 @@ void utilitaire2::decompresser(const std::string& src, const std::string& dest)
 			}
 		}while(continuer);
 
-		std::cout << decalage_bloc << " octets lus" << std::endl;
+		std::cout << decalage_bloc - lu << " octets lus" << std::endl;
 		
 	}
 	else

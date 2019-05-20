@@ -1,0 +1,34 @@
+
+1ere lecture:
+-------------
+offset = 0, L = 8k + l 
+
+dernier octet ecrit
+|x|x|x|x|x|x|x|_|
+
+offset recalculé: 7
+
+2eme lecture:
+-------------
+offset = 7, L = 8k + 3
+
+Lecture du dernier offset ecrit : |x|x|x|x|x|x|x|_| Op OR avec les bit de poids forts des octets de la 2eme lecture decales à droite d'offset 7
+
+o1 << offset (7) :|_|_|_|_|_|_|_|x| 
+
+|x|x|x|x|x|x|x|_| OR (o1 >> 7) |_|_|_|_|_|_|_|x| => ecriture
+
+l'octet o2 decale à droite d'offset 7 |_|_|_|_|_|_|_|x|
+
+(o1<<1) |x|x|x|x|x|x|x|_| OR (o2 >> 7) |_|_|_|_|_|_|_|x|
+
+dernier octet o-n decale de 7 a droite et combine OR
+
+(o-(n-1) << 1) |x|x|x|x|x|x|x|_| OR (o-n >> 7) |_|_|_|_|_|_|_|x|
+
+
+
+
+
+
+
